@@ -21,8 +21,20 @@ public class DdlTestCase {
         }
     }
 
+    @Test
+    public void demo2() throws IOException {
+        DdlParser parser = new DdlParser();
+        Collection<SpaceTypeDescriptorBuilder> result = parser.parse(BootIOUtils.getResourcePath("ddl-example-public.txt"));
+        System.out.println("Parsed types: " + result.size());
+        for (SpaceTypeDescriptorBuilder builder : result) {
+            SpaceTypeDescriptor typeDescriptor = builder.create();
+            System.out.println(toString(typeDescriptor));
+        }
+    }
+
     private String toString(SpaceTypeDescriptor typeDescriptor) {
         StringBuilder sb = new StringBuilder("Type: " + typeDescriptor.getTypeName());
+        sb.append(System.lineSeparator()).append("  Id: " + typeDescriptor.getIdPropertyName());
         int numOfFixedProperties = typeDescriptor.getNumOfFixedProperties();
         for (int i = 0; i < numOfFixedProperties; i++) {
             SpacePropertyDescriptor property = typeDescriptor.getFixedProperty(i);

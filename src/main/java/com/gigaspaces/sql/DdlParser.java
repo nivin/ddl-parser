@@ -15,6 +15,7 @@ public class DdlParser {
 
     private static final String CREATE_TABLE_PREFIX = "CREATE TABLE ";
     private static final String ALTER_TABLE_PREFIX = "ALTER TABLE ";
+    private static final String PK_PREFIX = "PRIMARY KEY ";
 
     public Collection<SpaceTypeDescriptorBuilder> parse(Path path) throws IOException {
         byte[] data = Files.readAllBytes(path);
@@ -47,13 +48,33 @@ public class DdlParser {
         SpaceTypeDescriptorBuilder builder = new SpaceTypeDescriptorBuilder(typeName);
         // Remove everything outside 'create table (...) ...'
         sql.trimOutsideEnclosingPair('(', ')');
-        // Split and parse table columns:
-        Collection<String> columns = sql.splitExcludingEnclosingPair(',', '(', ')');
-        for (String column : columns) {
-            parseColumn(column, builder);
+        // Split and parse table items:
+        Collection<String> items = sql.splitExcludingEnclosingPair(',', '(', ')');
+        for (String item : items) {
+            if (item.startsWith(PK_PREFIX))
+                parsePrimaryKey(item, builder);
+            else
+                parseColumn(item, builder);
         }
 
         return builder;
+    }
+
+    private void parsePrimaryKey(String item, SpaceTypeDescriptorBuilder builder) {
+        StringWrapper sw = new StringWrapper(item);
+        sw.skip(PK_PREFIX);
+        sw.trim();
+        if (sw.s.startsWith("(") && sw.s.endsWith(")")) {
+            sw.skip(1);
+            sw.skipTrailing(1);
+            sw.trim();
+        }
+        String[] pkColumns = sw.s.split(",");
+        if (pkColumns.length == 1) {
+            builder.idProperty(pkColumns[0]);
+        } else {
+            throw new IllegalStateException("Composite primary key is under construction");
+        }
     }
 
     private void parseColumn(String column, SpaceTypeDescriptorBuilder builder) {
@@ -61,6 +82,7 @@ public class DdlParser {
         String name = sw.readUntilWhiteSpace();
         sw.trim();
         String sqlType = sw.readUntilWhiteSpace();
+
         Class<?> javaType = parseSqlType(sqlType);
         builder.addFixedProperty(name, javaType);
     }
@@ -160,6 +182,10 @@ public class DdlParser {
             s = s.substring(length);
         }
 
+        public void skipTrailing(int length) {
+            s = s.substring(0, s.length() - length);
+        }
+
         public void skip(String prefix) {
             s = s.substring(prefix.length());
         }
@@ -173,7 +199,8 @@ public class DdlParser {
         }
 
         private String readUntilWhiteSpace() {
-            return readUntil(indexOfWhiteSpace());
+            int i = indexOfWhiteSpace();
+            return readUntil(i != -1 ? i : s.length());
         }
 
         public int indexOfWhiteSpace() {
